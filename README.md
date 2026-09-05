@@ -1,79 +1,65 @@
 # Joorvis
 
-Assistant personnel Telegram, en trois tailles. Un seul utilisateur : le tien.
-Tout le reste est ignoré en silence.
+Assistant Telegram mono-utilisateur.
 
-Le principe qui tient l'ensemble : **ce qui peut être compris sans le modèle
-ne coûte pas un token.** « rappelle-moi le dentiste demain 10h » est traité
-par une analyse locale, en quelques millisecondes et gratuitement. Le modèle
-n'entre en jeu que pour ce qui demande vraiment de comprendre.
-
-```
-make install     # crée .venv, installe, prépare .env
-                 # → remplis TELEGRAM, GROQ et MY_ID
-make mid         # lance
-```
-
----
-
-## Choisir sa version
-
-| | light | mid | high |
-|---|---|---|---|
-| Rappels ponctuels, quotidiens, hebdo, jours ouvrés | ✅ | ✅ | ✅ |
-| Analyse locale sans token | ✅ | ✅ | ✅ |
-| Vocaux transcrits | ✅ | ✅ | ✅ |
-| Recherche web, lecture de page | ✅ | ✅ | ✅ |
-| Cours crypto | ✅ | ✅ | ✅ |
-| Tâches | | ✅ | ✅ |
-| Météo, calcul exact, devises | | ✅ | ✅ |
-| Mémoire longue durée | | ✅ | ✅ |
-| Brief du matin | | ✅ assemblé | ✅ rédigé |
-| Photos lues par un modèle de vision | | | ✅ |
-| Documents txt, md, csv, json, pdf | | | ✅ |
-| Notes, Wikipédia, recherche approfondie | | | ✅ |
-| Export, purge, stats sur 7 jours | | | ✅ |
-| Outils exposés au modèle | 3 | 8 | 10 |
-| Prompt système | ~120 tokens | ~230 | ~280 |
-
-**light** si tu veux surtout des rappels et que la facture reste invisible.
-**mid** pour l'usage quotidien : c'est la version par défaut.
-**high** si tu veux lui envoyer une photo de ticket, un PDF, et qu'il se
-débrouille.
-
-Les trois partagent la même base `joorvis.db` et le même format : tu peux
-passer de l'une à l'autre sans rien perdre. Les colonnes manquantes sont
-ajoutées automatiquement au démarrage.
-
----
+Le traitement des rappels compatibles avec le parseur local est effectué sans appel au modèle. Les autres requêtes passent par une boucle d’outils.
 
 ## Installation
 
-1. **Créer le bot** — parle à [@BotFather](https://t.me/BotFather),
-   `/newbot`, récupère le token.
-2. **Ton identifiant** — parle à [@userinfobot](https://t.me/userinfobot),
-   note le nombre.
-3. **Clé Groq** — [console.groq.com](https://console.groq.com), gratuite.
-4. `make install`, remplis `.env`, puis `make mid`.
-
-Pour que ça tourne en permanence sur un serveur ou un Raspberry :
-
+```bash
+make install
 ```
+
+`make install` crée l’environnement virtuel, installe les dépendances et prépare `.env`.
+
+Variables obligatoires :
+
+* `TELEGRAM` : token du bot Telegram
+* `GROQ` : clé API Groq
+* `MY_ID` : identifiant Telegram de l’utilisateur autorisé
+
+Lancement :
+
+```bash
+make mid
+```
+
+### Service systemd
+
+```bash
 make service BOT=mid
 sudo cp joorvis.service /etc/systemd/system/
 sudo systemctl enable --now joorvis
 make logs
 ```
 
----
+## Versions
 
-## Parler au bot
+| Fonctionnalité                                    | light |      mid |   high |
+| ------------------------------------------------- | ----: | -------: | -----: |
+| Rappels ponctuels                                 |     ✅ |        ✅ |      ✅ |
+| Rappels quotidiens / hebdomadaires / jours ouvrés |     ✅ |        ✅ |      ✅ |
+| Analyse locale des rappels                        |     ✅ |        ✅ |      ✅ |
+| Transcription des vocaux                          |     ✅ |        ✅ |      ✅ |
+| Recherche web / lecture de page                   |     ✅ |        ✅ |      ✅ |
+| Cours crypto                                      |     ✅ |        ✅ |      ✅ |
+| Tâches                                            |       |        ✅ |      ✅ |
+| Météo / calcul / devises                          |       |        ✅ |      ✅ |
+| Mémoire longue durée                              |       |        ✅ |      ✅ |
+| Brief du matin                                    |       | assemblé | rédigé |
+| Vision                                            |       |          |      ✅ |
+| Documents txt, md, csv, json, pdf                 |       |          |      ✅ |
+| Notes / Wikipédia / recherche approfondie         |       |          |      ✅ |
+| Export / purge / statistiques                     |       |          |      ✅ |
+| Outils exposés au modèle                          |     3 |        8 |     10 |
 
-### Ce qui ne coûte rien
+Les trois versions utilisent la même base SQLite `joorvis.db`. Les migrations de colonnes manquantes sont effectuées au démarrage.
 
-Ces formulations sont reconnues localement. Le modèle n'est jamais appelé.
+## Parsing local des rappels
 
-```
+Les formulations suivantes sont traitées localement :
+
+```text
 rappelle-moi le garage dans 20 min
 rappelle-moi d'appeler Paul dans 1h30
 rappelle-moi le dentiste demain 10h
@@ -84,7 +70,6 @@ rappelle-moi de manger à midi
 rappelle-moi le 20 septembre à 14h de payer
 rappelle-moi de payer le loyer le 5
 rappelle-moi la révision dans 2 semaines
-
 tous les jours vitamines 8h
 chaque matin méditation
 chaque lundi sortir la poubelle 20h
@@ -93,178 +78,153 @@ en semaine réveil 7h30
 le week-end grasse matinée 10h
 ```
 
-Déclencheurs acceptés : `rappelle-moi`, `rappel`, `rdv`, `note`,
-`n'oublie pas de`, `penser à`, `faut que je`.
+Déclencheurs :
 
-Moments de la journée, quand l'heure n'est pas précisée :
-matin `9h` · midi `12h` · après-midi `14h` · soir `19h` · nuit `22h` ·
-sans indication `9h`.
-
-### Le raccourci `+`
-
-Le préfixe `+` (ou `.`) rend le verbe inutile.
-
-```
-+ dentiste demain 10h     → rappel, il y a une heure
-+ poubelle dans 2 h       → rappel
-+ acheter du pain         → tâche (mid et high), il n'y a pas d'heure
+```text
+rappelle-moi
+rappel
+rdv
+note
+n'oublie pas de
+penser à
+faut que je
 ```
 
-### Ce qui part au modèle
+Heures implicites :
 
-Tout le reste : questions, météo, web, calcul, et toute phrase de rappel
-qui sort des schémas ci-dessus. Le bot appelle ses outils tout seul et
-répond en une fois.
+| Expression        | Heure |
+| ----------------- | ----: |
+| matin             | 09:00 |
+| midi              | 12:00 |
+| après-midi        | 14:00 |
+| soir              | 19:00 |
+| nuit              | 22:00 |
+| aucune indication | 09:00 |
 
-Quand une phrase est **ambiguë**, elle part au modèle plutôt que d'être
-mal devinée. « rappelle-moi la réunion de 14h à 16h » contient deux heures :
-le parseur local passe la main au lieu de choisir au hasard.
+### Préfixe `+`
 
-### Commandes
+Le préfixe `+` ou `.` permet d'omettre le verbe :
 
-| | light | mid | high |
-|---|---|---|---|
-| `/r` rappels, avec bouton d'annulation | ✅ | ✅ | ✅ |
-| `/undo` annule la dernière action | ✅ | ✅ | ✅ |
-| `/stats` consommation | ✅ | ✅ | ✅ 7 jours |
-| `/reset` oublie le fil en cours | ✅ | ✅ | ✅ |
-| `/t` tâches | | ✅ | ✅ |
-| `/memoire` ce qu'il retient de toi | | ✅ | ✅ |
-| `/brief` le point du jour | | ✅ | ✅ |
-| `/notes [mot]` | | | ✅ |
-| `/export` toutes tes données en JSON | | | ✅ |
-| `/purge` effacer, avec confirmation | | | ✅ |
-
-Un rappel qui sonne propose `+10 min`, `+1 h`, `✓`.
-
----
-
-## Ce qui a été corrigé par rapport aux versions précédentes
-
-Ces points venaient des scripts d'origine et sont réglés dans les trois
-versions.
-
-**« Tu dois le dentiste demain à 10h ».** La confirmation reprenait un
-gabarit qui ne tenait pas debout dès que la tâche n'était pas un verbe.
-Format unique désormais, le même en local et via le modèle :
-
+```text
++ dentiste demain 10h
++ poubelle dans 2 h
++ acheter du pain
 ```
+
+Le dernier exemple crée une tâche en `mid` et `high`.
+
+### Requête ambiguë
+
+Une phrase contenant plusieurs repères temporels incompatibles ou non résolus n'est pas interprétée localement. Elle est transmise au modèle.
+
+Exemple :
+
+```text
+rappelle-moi la réunion de 14h à 16h
+```
+
+## Requêtes traitées par le modèle
+
+Les requêtes qui ne correspondent pas au parseur local sont transmises au modèle :
+
+* questions ;
+* météo ;
+* recherche web ;
+* calcul ;
+* requêtes de rappel hors schéma local ;
+* autres opérations nécessitant les outils.
+
+Le modèle peut appeler plusieurs outils en parallèle et recommencer jusqu'à `MAX_STEPS`.
+
+## Commandes Telegram
+
+| Commande       | light | mid | high |
+| -------------- | ----: | --: | ---: |
+| `/r` rappels   |     ✅ |   ✅ |    ✅ |
+| `/undo`        |     ✅ |   ✅ |    ✅ |
+| `/stats`       |     ✅ |   ✅ |    ✅ |
+| `/reset`       |     ✅ |   ✅ |    ✅ |
+| `/t` tâches    |       |   ✅ |    ✅ |
+| `/memoire`     |       |   ✅ |    ✅ |
+| `/brief`       |       |   ✅ |    ✅ |
+| `/notes [mot]` |       |     |    ✅ |
+| `/export`      |       |     |    ✅ |
+| `/purge`       |       |     |    ✅ |
+
+Un rappel déclenché expose les actions `+10 min`, `+1 h` et `✓`.
+
+## Format des rappels
+
+Le format de confirmation est commun au traitement local et au traitement via modèle :
+
+```text
 ⏰ garage · 16h55 (dans 20 min)
 ⏰ dentiste · demain 10h
 ⏰ vitamines · tous les jours 8h
 ⏰ réveil · en semaine 7h30
 ```
 
-Le délai n'apparaît que sous 3 heures — au-delà, l'heure suffit et la
-parenthèse n'apportait rien. Les outils renvoient la ligne toute faite dans
-un champ `confirmation` que le modèle doit recopier tel quel : il ne peut
-plus reformuler une date à sa façon.
+Le délai relatif est affiché uniquement pour les échéances inférieures à trois heures.
 
-**Le premier caractère du rappel disparaissait.** « rappelle-moi d'appeler
-Paul » donnait « ppeler Paul » : le nettoyage retirait « a » ou « de » sans
-vérifier qu'un espace suivait.
+Les outils retournent directement le texte de confirmation dans le champ `confirmation`. Le modèle doit reprendre cette valeur telle quelle.
 
-**« sortir la poubelle 20h » se lisait « le 2 » puis « 0h ».** Les motifs
-temporels pouvaient s'accrocher au milieu d'un mot. Ils exigent maintenant
-un mot entier.
+## Corrections et contraintes du parseur
 
-**Les connexions SQLite n'étaient jamais fermées.** `with sqlite3.connect()`
-valide la transaction mais ne ferme rien : les descripteurs s'accumulaient à
-chaque rappel. Remplacé par un gestionnaire de contexte qui ferme, avec
-`journal_mode=WAL` et un délai d'attente.
+Le parseur :
 
-**Le snooze relisait le texte du message Telegram.** `removeprefix("⏰ ")`
-sur le message affiché : un rappel déjà repoussé revenait déformé. Le texte
-vient maintenant de la base, et le rappel garde son identifiant.
+* ne supprime pas le premier caractère du texte du rappel lors du nettoyage ;
+* exige des limites de mots pour les motifs temporels ;
+* refuse les formulations ambiguës ;
+* reconnaît les récurrences hebdomadaires et les jours ouvrés ;
+* reconnaît les moments de la journée ;
+* reconnaît les dates comme `le 20 septembre` ;
+* reconnaît un repère temporel placé au début de la phrase ;
+* détecte les rappels manqués après un arrêt.
 
-**« dans 20 min » affichait « dans 19 min »** — troncature au lieu d'arrondi.
+## Base de données
 
-**`MY_ID` absent faisait planter au démarrage** avec une trace Python
-illisible. Message clair désormais, sur les trois variables obligatoires.
+Les connexions SQLite sont gérées par contexte et fermées après utilisation.
 
-**Une édition de message ratée perdait la réponse.** Le statut « · · · »
-devient la réponse ; si Telegram refuse l'édition, la réponse est envoyée
-comme nouveau message au lieu de disparaître.
+Configuration SQLite :
 
-**Le brief du matin ne partait pas si le modèle était indisponible.**
-Il est maintenant assemblé sans modèle, et seulement embelli par lui en
-version high.
+* `journal_mode=WAL` ;
+* délai d'attente configuré.
 
-Ajouté au passage : récurrences hebdomadaires et jours ouvrés, moments de la
-journée, dates du type « le 20 septembre », repère temporel en début de
-phrase (« rappelle-moi dans 20 min de sortir le plat »), refus explicite des
-phrases ambiguës, rattrapage des rappels manqués pendant un arrêt, et
-`check.py`.
+Les rappels sont persistants et rechargés au démarrage.
 
----
+Les rappels échus pendant un arrêt sont signalés au redémarrage.
 
-## Vérifier
+Un rappel déclenché reste en base jusqu'à ce que les actions de suivi puissent être effectuées.
 
-```
-make check
-```
+## Boucle d'outils
 
-Aucun réseau, aucun token. Le script passe une soixantaine de formulations
-dans le parseur des trois versions, affiche la sortie exacte de chacune,
-teste les outils hors ligne (rappels, tâches, notes, mémoire, calcul, et
-leurs cas d'erreur), et refuse : markdown dans un message, double espace,
-`None` visible, identifiant technique affiché, formule « Tu dois ».
+Lorsqu'une requête nécessite le modèle :
 
-```
-make lint      # ruff ou pyflakes
-make db        # ce que contient la base
-make backup    # copie datée
-```
+1. le modèle reçoit les outils disponibles ;
+2. il peut effectuer plusieurs appels en parallèle ;
+3. les résultats sont réinjectés dans le contexte ;
+4. la boucle continue jusqu'à obtention d'une réponse ou `MAX_STEPS` ;
+5. le message Telegram initial est édité au fur et à mesure ;
+6. l'historique des échanges d'outils est ensuite purgé.
 
----
+`ctx` et `chat_id` ne sont pas exposés au modèle et sont injectés lors de l'exécution.
 
-## Réglages
+Les contenus provenant du web sont marqués comme non fiables. Une page web est traitée comme donnée et non comme instruction.
 
-Tout est dans `.env`, rien à toucher dans le code.
+## Gestion du contexte
 
-| Variable | Défaut | Rôle |
-|---|---|---|
-| `TELEGRAM` | — | token BotFather |
-| `GROQ` | — | clé console.groq.com |
-| `MY_ID` | — | ton identifiant Telegram |
-| `CITY` | `Paris` | ville par défaut (mid, high) |
-| `BRIEF` | `off` / `7:30` | heure du brief, ou `off` |
-| `TZ_NAME` | `Europe/Paris` | fuseau |
-| `DB_PATH` | `joorvis.db` | base |
-| `CHAT_MODEL` | `openai/gpt-oss-120b` | modèle principal |
-| `AUDIO_MODEL` | `whisper-large-v3-turbo` | transcription des vocaux |
-| `VISION_MODEL` | `llama-4-scout` | lecture des photos (high) |
+Les paramètres suivants contrôlent la mémoire de conversation :
 
-Si un modèle disparaît du catalogue Groq, seule la ligne correspondante
-change — le code n'en dépend pas.
+* `MAX_TURNS` : nombre de tours conservés ;
+* `TOKEN_BUDGET` : seuil d'élagage ;
+* `TTL` : délai d'inactivité avant oubli ;
+* `MAX_STEPS` : nombre maximal d'itérations de la boucle d'outils.
 
-Dans le fichier, en haut : `MAX_TURNS` (tours gardés), `TOKEN_BUDGET`
-(seuil d'élagage), `TTL` (inactivité avant oubli), `MAX_STEPS` (garde-fou
-de la boucle d'outils).
+Lorsque `TOKEN_BUDGET` est dépassé, les tours les plus anciens sont supprimés.
 
----
+## Déclaration des outils
 
-## Comment c'est fait
-
-**Un message arrive.** S'il commence par `+`, le verbe devient optionnel.
-Le parseur local cherche une récurrence, puis un repère temporel, en début
-ou en fin de phrase. Ce qui reste devient le texte du rappel — sauf s'il
-contient encore une heure ou un jour, signe que la phrase est trop ambiguë
-pour être devinée : elle part alors au modèle.
-
-**Sinon, la boucle d'outils.** Le modèle voit les outils, en appelle
-plusieurs en parallèle, reçoit les résultats, recommence si besoin
-(`MAX_STEPS` fois au plus). Le message « · · · » est édité au fur et à
-mesure pour montrer ce qui tourne, puis devient la réponse : un seul
-message par requête.
-
-**L'historique est purgé des échanges d'outils** après chaque tour. C'est ce
-qui empêche une recherche web de peser sur les vingt messages suivants.
-Au-delà de `TOKEN_BUDGET`, les tours les plus anciens sortent.
-
-**Les outils sont déclarés par leur signature.** Le décorateur `@tool` lit
-les annotations et la docstring pour produire le schéma JSON envoyé au
-modèle. Ajouter un outil, c'est écrire une fonction :
+Les outils sont définis à partir de leur signature :
 
 ```python
 @tool
@@ -273,31 +233,131 @@ async def train(depart: Annotated[str, "Gare de départ"]) -> dict:
     ...
 ```
 
-`ctx` et `chat_id` sont masqués au modèle et injectés à l'exécution.
+Le décorateur `@tool` utilise les annotations et la docstring pour générer le schéma JSON transmis au modèle.
 
-**Le contenu web est marqué comme non fiable** dans la réponse de l'outil,
-et le prompt système rappelle qu'une page est une donnée à lire, jamais un
-ordre à suivre.
+## Vérification
 
-**Les rappels survivent au redémarrage.** Ils sont en base, rechargés au
-démarrage ; ceux qui sont tombés pendant l'arrêt sont annoncés en une fois.
-Un rappel qui a sonné reste en base le temps qu'un « +10 min » puisse le
-relire, puis disparaît.
+```bash
+make check
+```
 
----
+`check.py` exécute les tests sans réseau ni token.
+
+Les tests couvrent notamment :
+
+* parsing des rappels ;
+* récurrences ;
+* tâches ;
+* notes ;
+* mémoire ;
+* calcul ;
+* cas d'erreur ;
+* format des réponses.
+
+Certaines sorties interdites sont également vérifiées, notamment :
+
+* markdown dans les messages ;
+* doubles espaces ;
+* `None` visible ;
+* identifiants techniques exposés ;
+* formulations de confirmation incorrectes.
+
+Autres commandes :
+
+```bash
+make lint
+make db
+make backup
+```
+
+* `make lint` : linting avec `ruff` ou `pyflakes` ;
+* `make db` : contenu de la base ;
+* `make backup` : copie datée de la base.
+
+## Configuration
+
+La configuration est stockée dans `.env`.
+
+| Variable       | Défaut                   | Rôle                 |
+| -------------- | ------------------------ | -------------------- |
+| `TELEGRAM`     | —                        | token Telegram       |
+| `GROQ`         | —                        | clé API Groq         |
+| `MY_ID`        | —                        | identifiant Telegram |
+| `CITY`         | `Paris`                  | ville par défaut     |
+| `BRIEF`        | `off` / `7:30`           | heure du brief       |
+| `TZ_NAME`      | `Europe/Paris`           | fuseau horaire       |
+| `DB_PATH`      | `joorvis.db`             | chemin de la base    |
+| `CHAT_MODEL`   | `openai/gpt-oss-120b`    | modèle principal     |
+| `AUDIO_MODEL`  | `whisper-large-v3-turbo` | transcription audio  |
+| `VISION_MODEL` | `llama-4-scout`          | modèle de vision     |
+
+Paramètres internes :
+
+* `MAX_TURNS`
+* `TOKEN_BUDGET`
+* `TTL`
+* `MAX_STEPS`
+
+Les noms des modèles sont configurables indépendamment du code.
+
+## Architecture du traitement
+
+### Rappel local
+
+```text
+Message Telegram
+      │
+      ▼
+Préfixe + / .
+      │
+      ▼
+Détection de récurrence
+      │
+      ▼
+Détection du repère temporel
+      │
+      ▼
+Texte restant = rappel
+      │
+      ├── ambiguïté détectée ──► modèle
+      │
+      └── valide ──────────────► base SQLite
+```
+
+### Requête avec modèle
+
+```text
+Message Telegram
+      │
+      ▼
+Modèle
+      │
+      ▼
+Appels d'outils
+      │
+      ▼
+Résultats
+      │
+      └── boucle jusqu'à MAX_STEPS
+                  │
+                  ▼
+               Réponse
+```
+
+Le message `· · ·` est édité pendant l'exécution puis remplacé par la réponse finale.
 
 ## Fichiers
 
-```
-joorvis_light.py   version ultra light
-joorvis_mid.py     version équilibrée
-joorvis_high.py    version complète
-check.py           vérification des sorties, sans réseau
-Makefile           make pour voir les cibles
+```text
+joorvis_light.py
+joorvis_mid.py
+joorvis_high.py
+check.py
+Makefile
 requirements.txt
 .env.example
 ```
 
-Chaque version est un fichier autonome : tu peux en déployer une sans les
-autres. Le noyau commun (parseur, formats, base) est identique dans les
-trois, ce qui rend un correctif facile à reporter.
+Chaque version est exécutable indépendamment.
+
+Le parseur, les formats et la base SQLite sont communs aux trois versions.
